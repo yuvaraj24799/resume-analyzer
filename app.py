@@ -2,7 +2,6 @@ import streamlit as st
 import anthropic
 from docx import Document
 import PyPDF2
-import io
 
 # Page configuration
 st.set_page_config(
@@ -34,11 +33,8 @@ st.markdown("""
 st.markdown('<div class="main-header">🎯 AI Resume Analyzer</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Built with Claude API by Yuvaraj Thatiparthi | Analyze resume-job match instantly</div>', unsafe_allow_html=True)
 
-# Sidebar for API key
+# Sidebar
 with st.sidebar:
-    st.header("⚙️ Settings")
-    api_key = st.text_input("Anthropic API Key", type="password", help="Get yours at console.anthropic.com")
-    st.markdown("---")
     st.markdown("### 📊 About This App")
     st.write("This tool uses Claude AI to analyze how well your resume matches a job description.")
     st.write("**Features:**")
@@ -46,32 +42,37 @@ with st.sidebar:
     st.write("- Matching skills detected")
     st.write("- Missing skills")
     st.write("- Personalized recommendations")
+    st.write("- ATS keywords to add")
     st.markdown("---")
     st.markdown("**Built by:** [Yuvaraj Thatiparthi](https://linkedin.com/in/yuvaraj-thatiparthi)")
     st.markdown("**GitHub:** [github.com/yuvaraj24799](https://github.com/yuvaraj24799)")
+    st.markdown("---")
+    st.markdown("**Powered by:** Anthropic Claude API")
 
-# Helper function to extract text from uploaded files
+# Get API key from Streamlit secrets
+try:
+    api_key = st.secrets["ANTHROPIC_API_KEY"]
+except:
+    api_key = None
+    st.error("API key not configured. Please contact the app owner.")
+
+# Helper function to extract text
 def extract_text_from_file(uploaded_file):
     if uploaded_file is None:
         return ""
-    
     file_extension = uploaded_file.name.split(".")[-1].lower()
-    
     if file_extension == "pdf":
         pdf_reader = PyPDF2.PdfReader(uploaded_file)
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text() + "\n"
         return text
-    
     elif file_extension == "docx":
         doc = Document(uploaded_file)
         text = "\n".join([para.text for para in doc.paragraphs])
         return text
-    
     elif file_extension == "txt":
         return uploaded_file.read().decode("utf-8")
-    
     return ""
 
 # Main columns
@@ -99,17 +100,16 @@ analyze_button = st.button("🚀 Analyze Match", type="primary", use_container_w
 
 if analyze_button:
     if not api_key:
-        st.error("⚠️ Please enter your Anthropic API key in the sidebar")
+        st.error("API key not configured.")
     elif not resume_text:
-        st.error("⚠️ Please upload or paste your resume")
+        st.error("Please upload or paste your resume.")
     elif not jd_text_input:
-        st.error("⚠️ Please paste the job description")
+        st.error("Please paste the job description.")
     else:
         with st.spinner("🧠 Claude is analyzing your match..."):
             try:
                 client = anthropic.Anthropic(api_key=api_key)
-                
-                prompt = f"""You are an expert career coach and ATS recruiter. Analyze this resume against the job description and provide a structured assessment.
+                prompt = f"""You are an expert career coach and ATS recruiter. Analyze this resume against the job description.
 
 JOB DESCRIPTION:
 {jd_text_input}
@@ -120,44 +120,38 @@ RESUME:
 Provide your analysis in this EXACT format:
 
 ## Match Score
-[Give a single number from 0-100 representing overall match. Just the number followed by /100]
+[Single number from 0-100 followed by /100]
 
 ## Summary
 [2-3 sentences explaining the overall fit]
 
 ## Matching Skills Found
-[List 5-10 skills from the resume that match the job description as bullet points]
+[List 5-10 matching skills as bullet points]
 
 ## Missing Skills or Experience
-[List 3-7 important skills or experiences from the job description that are missing or weak in the resume as bullet points]
+[List 3-7 missing skills as bullet points]
 
 ## Specific Recommendations
-[Give 3-5 specific, actionable recommendations to improve the resume for this role as bullet points]
+[List 3-5 actionable recommendations as bullet points]
 
 ## ATS Keywords to Add
-[List 5-10 exact keywords from the job description that should be added to the resume as bullet points]
+[List 5-10 exact keywords to add as bullet points]
 
-Be specific, honest, and constructive. Focus on actionable insights."""
+Be specific, honest, and constructive."""
 
                 message = client.messages.create(
                     model="claude-sonnet-4-5",
                     max_tokens=2000,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
+                    messages=[{"role": "user", "content": prompt}]
                 )
-                
                 response_text = message.content[0].text
-                
                 st.markdown("---")
                 st.markdown("## 📊 Analysis Results")
                 st.markdown(response_text)
-                
-                st.success("✅ Analysis complete! Use these insights to improve your resume.")
-                
+                st.success("Analysis complete! Use these insights to improve your resume.")
+
             except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
-                st.info("💡 Common issues: Invalid API key, no credits, or network problem")
+                st.error(f"Error: {str(e)}")
 
 # Footer
 st.markdown("---")
