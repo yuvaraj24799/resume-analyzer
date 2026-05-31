@@ -2,7 +2,7 @@ import streamlit as st
 import anthropic
 from docx import Document
 import PyPDF2
-import json
+import re
 from datetime import datetime
 
 # Page configuration
@@ -40,13 +40,6 @@ st.markdown("""
     .score-low { background: linear-gradient(135deg, #f7971e, #ffd200); color: white; }
     .score-number { font-size: 4rem; font-weight: bold; }
     .score-label { font-size: 1.2rem; margin-top: 0.5rem; }
-    .metric-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #667eea;
-        margin: 0.5rem 0;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -68,7 +61,6 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Built by:** [Yuvaraj Thatiparthi](https://linkedin.com/in/yuvaraj-thatiparthi)")
     st.markdown("**GitHub:** [github.com/yuvaraj24799](https://github.com/yuvaraj24799)")
-    st.markdown("**Live App:** [yuvaraj-resume-analyzer.streamlit.app](https://yuvaraj-resume-analyzer.streamlit.app)")
     st.markdown("---")
     st.markdown("**Powered by:** Anthropic Claude API")
 
@@ -113,14 +105,13 @@ def show_score_gauge(score):
         css_class = "score-low"
         label = "Needs Improvement ⚠️"
 
-    st.markdown(f"""
-        <div class="score-container {css_class}">
-            <div class="score-number">{score}/100</div>
-            <div class="score-label">{label}</div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Progress bar
+    st.markdown(
+        '<div class="score-container ' + css_class + '">'
+        '<div class="score-number">' + str(score) + '/100</div>'
+        '<div class="score-label">' + label + '</div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
     st.progress(score / 100)
 
 # Extract score from response
@@ -131,7 +122,6 @@ def extract_score(response_text):
             for j in range(i+1, min(i+4, len(lines))):
                 next_line = lines[j].strip()
                 if next_line:
-                    import re
                     numbers = re.findall(r'\b(\d{1,3})\b', next_line)
                     for num in numbers:
                         if 0 <= int(num) <= 100:
@@ -145,8 +135,7 @@ with col1:
     st.subheader("📄 Your Resume")
     resume_file = st.file_uploader(
         "Upload Resume (PDF, DOCX, or TXT)",
-        type=["pdf", "docx", "txt"],
-        help="Max 200MB. Supports PDF, Word, and text files."
+        type=["pdf", "docx", "txt"]
     )
     resume_text_input = st.text_area(
         "Or paste resume text here",
@@ -168,7 +157,7 @@ if resume_file is not None:
     with st.spinner("Reading your resume..."):
         resume_text = extract_text_from_file(resume_file)
     if resume_text:
-        st.success(f"Resume loaded successfully!")
+        st.success("Resume loaded successfully!")
 elif resume_text_input:
     resume_text = resume_text_input
 
@@ -190,7 +179,6 @@ if analyze_button:
     elif len(jd_text_input) < 50:
         st.error("Job description seems too short. Please paste the full job description.")
     else:
-        # Progress bar during analysis
         progress_bar = st.progress(0)
         status_text = st.empty()
 
@@ -206,38 +194,28 @@ if analyze_button:
             status_text.text("🤖 Matching skills and experience...")
             progress_bar.progress(60)
 
-            prompt = f"""You are an expert career coach and ATS recruiter with 15 years of experience. Analyze this resume against the job description and provide a detailed, honest assessment.
-
-JOB DESCRIPTION:
-{jd_text_input}
-
-RESUME:
-{resume_text}
-
-Provide your analysis in this EXACT format:
-
-## Match Score
-[Single number from 0-100 representing overall match percentage]
-
-## Summary
-[2-3 sentences explaining the overall fit, being specific about strengths and gaps]
-
-## Matching Skills Found
-[List 5-10 specific skills/experiences from the resume that directly match the job requirements as bullet points]
-
-## Missing Skills or Experience
-[List 3-7 important skills or experiences from the job description that are missing or weak in the resume as bullet points]
-
-## Specific Recommendations
-[List 4-5 specific, actionable recommendations to improve the resume for this exact role as bullet points]
-
-## ATS Keywords to Add
-[List 8-10 exact keywords/phrases from the job description that should be added to the resume as bullet points]
-
-## Interview Talking Points
-[List 3 strong talking points the candidate should emphasize in interviews based on their background as bullet points]
-
-Be specific, honest, and constructive. Reference actual content from both documents."""
+            prompt = (
+                "You are an expert career coach and ATS recruiter with 15 years of experience. "
+                "Analyze this resume against the job description and provide a detailed, honest assessment.\n\n"
+                "JOB DESCRIPTION:\n" + jd_text_input + "\n\n"
+                "RESUME:\n" + resume_text + "\n\n"
+                "Provide your analysis in this EXACT format:\n\n"
+                "## Match Score\n"
+                "[Single number from 0-100 representing overall match percentage]\n\n"
+                "## Summary\n"
+                "[2-3 sentences explaining the overall fit]\n\n"
+                "## Matching Skills Found\n"
+                "[List 5-10 specific matching skills as bullet points]\n\n"
+                "## Missing Skills or Experience\n"
+                "[List 3-7 missing skills as bullet points]\n\n"
+                "## Specific Recommendations\n"
+                "[List 4-5 actionable recommendations as bullet points]\n\n"
+                "## ATS Keywords to Add\n"
+                "[List 8-10 exact keywords to add as bullet points]\n\n"
+                "## Interview Talking Points\n"
+                "[List 3 strong talking points to emphasize in interviews as bullet points]\n\n"
+                "Be specific, honest, and constructive."
+            )
 
             status_text.text("✍️ Generating detailed recommendations...")
             progress_bar.progress(80)
@@ -253,28 +231,24 @@ Be specific, honest, and constructive. Reference actual content from both docume
 
             response_text = message.content[0].text
 
-            # Clear progress indicators
             progress_bar.empty()
             status_text.empty()
 
-            # Show results
             st.markdown("---")
             st.markdown("## 📊 Analysis Results")
 
-            # Extract and show score gauge
             score = extract_score(response_text)
             if score is not None:
                 col_score1, col_score2, col_score3 = st.columns([1, 2, 1])
                 with col_score2:
                     show_score_gauge(score)
 
-                # Score metrics row
                 met1, met2, met3 = st.columns(3)
                 with met1:
                     if score >= 70:
-                        st.metric("Match Score", f"{score}/100", "Strong Match")
+                        st.metric("Match Score", str(score) + "/100", "Strong Match")
                     else:
-                        st.metric("Match Score", f"{score}/100", "Needs Work")
+                        st.metric("Match Score", str(score) + "/100", "Needs Work")
                 with met2:
                     if score >= 80:
                         st.metric("Interview Chance", "High", "Apply Now!")
@@ -286,11 +260,51 @@ Be specific, honest, and constructive. Reference actual content from both docume
                     st.metric("Analysis By", "Claude AI", "Anthropic")
 
             st.markdown("---")
-
-            # Show full analysis
             st.markdown(response_text)
 
-            # Download button
             st.markdown("---")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            download_content = f
+            date_str = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+            separator = "=" * 60
+            download_content = (
+                "AI RESUME ANALYSIS REPORT\n"
+                "Generated by: Yuvaraj Thatiparthi AI Resume Analyzer\n"
+                "Powered by: Anthropic Claude API\n"
+                "Date: " + date_str + "\n"
+                "Live App: https://yuvaraj-resume-analyzer.streamlit.app\n\n"
+                + separator + "\n\n"
+                + response_text + "\n\n"
+                + separator + "\n"
+                "Built by Yuvaraj Thatiparthi\n"
+                "LinkedIn: linkedin.com/in/yuvaraj-thatiparthi\n"
+                "GitHub: github.com/yuvaraj24799\n"
+            )
+
+            st.download_button(
+                label="📥 Download Analysis Report",
+                data=download_content,
+                file_name="resume_analysis_" + timestamp + ".txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+
+            st.success("Analysis complete! Use these insights to improve your resume!")
+
+        except Exception as e:
+            progress_bar.empty()
+            status_text.empty()
+            st.error("Error: " + str(e))
+            st.info("Please check your internet connection or try again.")
+
+# Footer
+st.markdown("---")
+col_f1, col_f2, col_f3 = st.columns(3)
+with col_f1:
+    st.markdown("**🎯 AI Resume Analyzer**")
+    st.markdown("Powered by Anthropic Claude API")
+with col_f2:
+    st.markdown("**👨‍💻 Built by**")
+    st.markdown("[Yuvaraj Thatiparthi](https://linkedin.com/in/yuvaraj-thatiparthi)")
+with col_f3:
+    st.markdown("**💻 Source Code**")
+    st.markdown("[github.com/yuvaraj24799](https://github.com/yuvaraj24799/resume-analyzer)")
