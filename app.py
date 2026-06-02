@@ -81,11 +81,13 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Powered by:** Anthropic Claude API")
 
-# Get API key from Streamlit secrets
+# Get API key from Streamlit secrets or environment variable
+import os
 try:
     api_key = st.secrets["ANTHROPIC_API_KEY"]
 except:
-    api_key = None
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+if not api_key:
     st.error("API key not configured.")
 
 # Initialize session state for history
